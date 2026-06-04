@@ -90,33 +90,27 @@ else:
 
 st.divider()
 
-# --- 4번 기능: 사이트 및 콘텐츠 리뷰 시스템 ---
-st.subheader("💬 리뷰 및 평가 남기기")
-st.write("추천받은 항목이나 사이트에 대한 후기를 남겨주세요!")
+# 탭 생성
+tab1, tab2 = st.tabs(["✨ 추천 유니버스", "💬 리뷰 및 평가"])
 
-with st.form("review_form"):
-    rev_col1, rev_col2 = st.columns(2)
-    with rev_col1:
-        reviewer_name = st.text_input("닉네임 (익명을 원하시면 '익명'이라고 적어주세요)", "익명")
-    with rev_col2:
-        reviewer_mbti = st.selectbox("본인의 MBTI", ["ISTJ", "ISFJ", "INFJ", "INTJ", "ISTP", "ISFP", "INFP", "INTP", 
-                                                "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ"])
-        
-    target_item = st.selectbox("어떤 것에 대한 리뷰인가요?", ["사이트 전반적인 후기"] + [d["title"] for d in MOCK_DATA])
-    rating = st.slider("만족도 (1~5점)", 1, 5, 5)
-    review_text = st.text_area("리뷰 내용을 작성해주세요.")
+with tab1:
+    # --- 1, 2, 3번 기능 (검색 및 추천 결과 출력) ---
+    st.subheader("🔍 검색하기")
+    search_query = st.text_input("제목을 검색하거나, 앞에 #을 붙여서 해시태그를 검색해봐!")
     
-    submitted = st.form_submit_button("리뷰 등록하기")
-    if submitted and review_text:
-        new_review = {
-            "name": reviewer_name,
-            "mbti": reviewer_mbti,
-            "target": target_item,
-            "rating": "⭐" * rating,
-            "text": review_text
-        }
-        st.session_state.reviews.insert(0, new_review) # 최신 리뷰가 위로 오게 추가
-        st.success("리뷰가 성공적으로 등록되었습니다!")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        mbti = st.selectbox("1. 당신의 MBTI는?", ["모름", "ISTJ", "ENTP", "INTJ", "ENFP"]) # 리스트 축약함
+    with col2:
+        genres = st.multiselect("2. 선호하는 장르는?", ["SF", "로맨스", "스릴러", "코미디"])
+    with col3:
+        platform = st.selectbox("주로 이용하는 플랫폼은?", ["상관없음", "Netflix", "Watcha", "Spotify"])
+        
+    # (여기에 기존 필터링 및 결과 출력 로직 그대로 삽입)
+    
+with tab2:
+    # --- 4번 기능 (리뷰 폼 및 리스트 출력) ---
+    st.subheader("리뷰 남기기")
 
 # 등록된 리뷰 보여주기
 if st.session_state.reviews:
@@ -126,3 +120,6 @@ if st.session_state.reviews:
             st.markdown(f"**{rev['target']}** | {rev['rating']} | 작성자: {rev['name']} `#{rev['mbti']}`")
             st.write(f"> {rev['text']}")
             st.markdown("---")
+
+
+#수정요소
