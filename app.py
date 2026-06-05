@@ -23,8 +23,9 @@ except KeyError:
 # ---------------------------------------------------------
 if not firebase_admin._apps:
     try:
-        # 클라우드 금고의 문자열을 파이썬 딕셔너리로 변환하여 인증
-        firebase_secrets = json.loads(st.secrets["FIREBASE_JSON"])
+        # 키에 포함된 줄바꿈 문자를 제거하고 안전하게 로드합니다.
+        raw_json = st.secrets["FIREBASE_JSON"].replace('\n', '').replace('\r', '')
+        firebase_secrets = json.loads(raw_json)
         cred = credentials.Certificate(firebase_secrets)
         firebase_admin.initialize_app(cred)
     except Exception as e:
