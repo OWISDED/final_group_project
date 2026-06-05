@@ -23,7 +23,6 @@ except KeyError:
 # ---------------------------------------------------------
 if not firebase_admin._apps:
     try:
-        # 키에 포함된 줄바꿈 문자를 제거하고 안전하게 로드합니다.
         raw_json = st.secrets["FIREBASE_JSON"].replace('\n', '').replace('\r', '')
         firebase_secrets = json.loads(raw_json)
         cred = credentials.Certificate(firebase_secrets)
@@ -36,7 +35,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ---------------------------------------------------------
-# 3. 세션 상태 초기화 (현재 접속자 정보 기억)
+# 3. 세션 상태 초기화 (현재 접속자 정보 및 화면 상태 기억)
 # ---------------------------------------------------------
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
@@ -44,6 +43,11 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = ""
 if 'current_user_mbti' not in st.session_state:
     st.session_state.current_user_mbti = ""
+# 더보기 버튼을 위한 영화 표시 개수 상태
+if 'movie_limit' not in st.session_state:
+    st.session_state.movie_limit = 8
+if 'last_mbti' not in st.session_state:
+    st.session_state.last_mbti = ""
 
 # ---------------------------------------------------------
 # 4. 로그인 & 회원가입 화면
@@ -95,7 +99,7 @@ if not st.session_state.logged_in:
                         })
                         st.success("회원가입 완료! 로그인 탭에서 로그인해주세요.")
                     
-    st.stop() # 로그인 안 되었을 땐 여기서 화면 렌더링 멈춤
+    st.stop()
 
 # =========================================================
 # 5. 메인 화면 (로그인 성공 시 출력)
@@ -150,48 +154,67 @@ def get_direct_link(platform, title):
 def fetch_movies_by_mbti(mbti_type):
     genre_id = MBTI_MAPPING[mbti_type]["genre"]
     tags = MBTI_MAPPING[mbti_type]["tags"]
-    discover_url = f"https://api.themoviedb.org/3/discover/movie?api_key={TMDB_API_KEY}&language=ko-KR&sort_by=popularity.desc&with_genres={genre_id}&page=1"
-    movies_res = requests.get(discover_url).json()
     
     movie_data_list = []
-    # 상위 8개 영화만 출력
-    for movie in movies_res.get('results', [])[:8]:
-        movie_id = movie['id']
-        provider_url = f"https://api.themoviedb.org/3/movie/{movie_id}/watch/providers?api_key={TMDB_API_KEY}"
-        provider_res = requests.get(provider_url).json()
+    
+    # 총 24개(기본 8개 + 더보기 16개)의 영화를 가져오기 위해 1~2페이지를 순회
+    for page in range(1, 3):
+        # [수정됨] 마이너한 영화 제외 필터 추가 (한국어/영어, 투표수 500개 이상)
+        discover_url = f"https://api.themoviedb.org/3/discover/movie?api_key={TMDB_API_KEY}&language=ko-KR&sort_by=popularity.desc&with_genres={genre_id}&with_original_language=ko|en&vote_count.gte=500&page={page}"
+        movies_res = requests.get(discover_url).json()
         
-        platform = "Google 검색"
-        if 'KR' in provider_res.get('results', {}) and 'flatrate' in provider_res['results']['KR']:
-            platform = provider_res['results']['KR']['flatrate'][0]['provider_name']
+        for movie in movies_res.get('results', []):
+            if len(movie_data_list) >= 24: # 24개까지만 수집
+                break
+                
+            movie_id = movie['id']
+            provider_url = f"https://api.themoviedb.org/3/movie/{movie_id}/watch/providers?api_key={TMDB_API_KEY}"
+            provider_res = requests.get(provider_url).json()
             
-        direct_url = get_direct_link(platform, movie['title'])
+            platform = "Google 검색"
+            if 'KR' in provider_res.get('results', {}) and 'flatrate' in provider_res['results']['KR']:
+                platform = provider_res['results']['KR']['flatrate'][0]['provider_name']
+                
+            direct_url = get_direct_link(platform, movie['title'])
+                
+            movie_data_list.append({
+                "title": movie['title'],
+                "platform": platform,
+                "tags": tags + [f"#{platform.replace(' ', '')}"],
+                "img": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie['poster_path'] else "https://via.placeholder.com/500x750?text=No+Image",
+                "url": direct_url,
+                "summary": movie['overview'][:80] + "..." if movie['overview'] else "요약 정보가 없습니다."
+            })
             
-        movie_data_list.append({
-            "title": movie['title'],
-            "platform": platform,
-            "tags": tags + [f"#{platform.replace(' ', '')}"],
-            "img": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie['poster_path'] else "https://via.placeholder.com/500x750?text=No+Image",
-            "url": direct_url,
-            "summary": movie['overview'][:80] + "..." if movie['overview'] else "요약 정보가 없습니다."
-        })
+        if len(movie_data_list) >= 24:
+            break
+            
     return movie_data_list
 
 # ---------------------------------------------------------
 # 6. 영화 추천 및 리뷰 UI 
 # ---------------------------------------------------------
 st.subheader("🔍 내 MBTI에 맞는 추천작 보기")
-# 기본 선택값을 로그인한 유저의 MBTI로 설정
 current_mbti_idx = list(MBTI_MAPPING.keys()).index(st.session_state.current_user_mbti)
 selected_mbti = st.selectbox("어떤 MBTI의 추천 영화를 볼까요?", list(MBTI_MAPPING.keys()), index=current_mbti_idx)
 
+# MBTI를 새로 선택하면 화면에 보여줄 영화 개수를 다시 8개로 초기화
+if st.session_state.last_mbti != selected_mbti:
+    st.session_state.movie_limit = 8
+    st.session_state.last_mbti = selected_mbti
+
 with st.spinner('해외 서버에서 영화 데이터를 가져오는 중입니다... 🍿'):
-    RECOMMENDED_MOVIES = fetch_movies_by_mbti(selected_mbti)
+    # 캐싱된 함수 호출 (최대 24개의 데이터 로드)
+    ALL_RECOMMENDED_MOVIES = fetch_movies_by_mbti(selected_mbti)
 
 st.subheader(f"✨ {selected_mbti} 맞춤 추천 결과")
 
-if RECOMMENDED_MOVIES:
+if ALL_RECOMMENDED_MOVIES:
+    # 세션에 저장된 limit 만큼만 슬라이싱하여 보여줌
+    movies_to_display = ALL_RECOMMENDED_MOVIES[:st.session_state.movie_limit]
+    
     cols = st.columns(4)
-    for i, item in enumerate(RECOMMENDED_MOVIES):
+    for i, item in enumerate(movies_to_display):
         with cols[i % 4]:
             st.image(item["img"], use_container_width=True)
             st.markdown(f"**{item['title']}**")
@@ -199,32 +222,28 @@ if RECOMMENDED_MOVIES:
             st.write(f"_{item['summary']}_")
             st.link_button(f"{item['platform']}에서 바로보기 🍿", item['url'], use_container_width=True)
             
-            # --- 리뷰 기능 (Firebase 연동) ---
+            # --- 리뷰 기능 ---
             with st.expander("📝 리뷰 보기 및 작성"):
-                # Firebase에서 이 영화에 달린 리뷰만 가져오기
                 reviews_ref = db.collection('reviews').where('target', '==', item['title']).stream()
                 movie_reviews = [{"id": r.id, **r.to_dict()} for r in reviews_ref]
                 
-                # 리뷰 목록 출력
                 if movie_reviews:
                     for rev in movie_reviews:
                         st.markdown(f"**{rev['name']}** `{rev['mbti']}` ({rev['rating']})")
                         st.write(f"> {rev['text']}")
                         
-                        # 내가 쓴 리뷰면 삭제 버튼 노출
                         if rev['name'] == st.session_state.current_user:
-                            if st.button("🗑️ 삭제", key=f"del_{rev['id']}"):
-                                db.collection('reviews').document(rev['id']).delete() # Firebase에서 영구 삭제
+                            if st.button("🗑️ 삭제", key=f"del_{rev['id']}_{i}"):
+                                db.collection('reviews').document(rev['id']).delete()
                                 st.rerun() 
                         st.markdown("---")
                 else:
                     st.info("아직 리뷰가 없어요. 첫 리뷰를 남겨보세요!")
                 
-                # 리뷰 작성 폼
-                with st.form(key=f"form_{item['title']}"):
+                with st.form(key=f"form_{item['title']}_{i}"):
                     st.write(f"작성자: **{st.session_state.current_user}**")
-                    new_rating = st.selectbox("평점", ["⭐⭐⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐", "⭐⭐", "⭐"], key=f"rate_{item['title']}")
-                    new_text = st.text_area("리뷰 내용", key=f"text_{item['title']}")
+                    new_rating = st.selectbox("평점", ["⭐⭐⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐", "⭐⭐", "⭐"], key=f"rate_{item['title']}_{i}")
+                    new_text = st.text_area("리뷰 내용", key=f"text_{item['title']}_{i}")
                     submit_review = st.form_submit_button("리뷰 등록")
                     
                     if submit_review and new_text:
@@ -235,7 +254,20 @@ if RECOMMENDED_MOVIES:
                             "mbti": st.session_state.current_user_mbti,
                             "rating": new_rating,
                             "text": new_text
-                        }) # Firebase에 새 리뷰 영구 저장
+                        })
                         st.rerun() 
+                        
+    # --- [수정됨] 더 보기 버튼 UI ---
+    st.write("") # 여백 추가
+    
+    # 24개 미만으로 보여지고 있을 때만 '더 보기' 버튼 노출
+    if st.session_state.movie_limit < len(ALL_RECOMMENDED_MOVIES):
+        # 중앙 정렬을 위해 컬럼 활용
+        _, center_col, _ = st.columns([4, 2, 4])
+        with center_col:
+            if st.button("🔽 추천 영화 더 보기 (16개 추가)", use_container_width=True):
+                # 표시할 영화 개수를 24개로 고정 (8 + 16 = 24)
+                st.session_state.movie_limit = 24
+                st.rerun()
 else:
     st.info("추천할 영화를 찾지 못했습니다.")
