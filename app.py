@@ -4,9 +4,10 @@ import time
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
+import json
 
 # 페이지 기본 설정
-st.set_page_config(page_title="김지환의 MBTI 취향 저격 추천기", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="MBTI 취향 저격 추천기", page_icon="🎬", layout="wide")
 
 # ---------------------------------------------------------
 # 1. 보안 설정: Streamlit 금고에서 TMDB API 키 가져오기
@@ -14,19 +15,20 @@ st.set_page_config(page_title="김지환의 MBTI 취향 저격 추천기", page_
 try:
     TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 except KeyError:
-    st.error("⚠️ .streamlit/secrets.toml 파일에 TMDB_API_KEY가 없습니다! 설정을 확인해주세요.")
+    st.error("⚠️ 클라우드 Secrets에 TMDB_API_KEY가 없습니다! 설정을 확인해주세요.")
     st.stop()
 
 # ---------------------------------------------------------
-# 2. Firebase 초기화 및 DB 연동
+# 2. Firebase 초기화 및 DB 연동 (클라우드 배포용)
 # ---------------------------------------------------------
-# Streamlit 특성상 반복 실행 시 중복 초기화를 방지합니다.
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate('firebase_key.json') 
+        # 클라우드 금고의 문자열을 파이썬 딕셔너리로 변환하여 인증
+        firebase_secrets = json.loads(st.secrets["FIREBASE_JSON"])
+        cred = credentials.Certificate(firebase_secrets)
         firebase_admin.initialize_app(cred)
-    except FileNotFoundError:
-        st.error("⚠️ firebase_key.json 파일을 찾을 수 없습니다! 파일명과 위치를 확인해주세요.")
+    except Exception as e:
+        st.error(f"⚠️ 파이어베이스 연동 에러가 발생했습니다: {e}")
         st.stop()
 
 # Firestore 데이터베이스 객체 생성
@@ -129,7 +131,7 @@ MBTI_MAPPING = {
     "ESFJ": {"genre": "35", "tags": ["#다같이보기좋은", "#코미디", "#웃음"]}
 }
 
-# --- 플랫폼 바로가기 링크 생성기 ---
+# --- 플랫폼 바로가기 링크 생성 ---
 def get_direct_link(platform, title):
     if platform == "Netflix":
         return f"https://www.netflix.com/search?q={title}"
@@ -174,7 +176,7 @@ def fetch_movies_by_mbti(mbti_type):
     return movie_data_list
 
 # ---------------------------------------------------------
-# 6. 영화 추천 및 리뷰 UI 영역
+# 6. 영화 추천 및 리뷰 UI 
 # ---------------------------------------------------------
 st.subheader("🔍 내 MBTI에 맞는 추천작 보기")
 # 기본 선택값을 로그인한 유저의 MBTI로 설정
