@@ -3,29 +3,48 @@ import streamlit as st
 # 페이지 기본 설정
 st.set_page_config(page_title="MBTI 취향 저격 추천기", page_icon="🎬", layout="wide")
 
-# 임시 데이터베이스 (나중에는 진짜 DB나 API로 바꿔야 해!)
+# 임시 데이터베이스 (향후 TMDB API나 CSV 데이터로 교체할 부분)
 MOCK_DATA = [
-    {"title": "인셉션", "type": "영화", "genre": "SF", "platform": "Netflix", "tags": ["#두뇌풀가동", "#SF", "#스릴러"], "mbti": ["INTP", "INTJ", "ENTP"], "img": "https://via.placeholder.com/150/0000FF/808080?Text=Inception", "url": "https://www.netflix.com"},
-    {"title": "라라랜드", "type": "영화", "genre": "로맨스", "platform": "Watcha", "tags": ["#로맨스", "#음악", "#감성"], "mbti": ["ENFP", "INFP", "ESFJ"], "img": "https://via.placeholder.com/150/FF0000/FFFFFF?Text=LaLaLand", "url": "https://watcha.com"},
-    {"title": "Hype Boy", "type": "음악", "genre": "K-POP", "platform": "Spotify", "tags": ["#신나는", "#KPOP", "#여름"], "mbti": ["ESFP", "ESTP", "ENFJ"], "img": "https://via.placeholder.com/150/00FF00/000000?Text=NewJeans", "url": "https://open.spotify.com"},
-    {"title": "잔잔한 클래식", "type": "음악", "genre": "클래식", "platform": "Apple Music", "tags": ["#휴식", "#클래식", "#집중"], "mbti": ["ISTJ", "ISFJ", "INFJ"], "img": "https://via.placeholder.com/150/FFFF00/000000?Text=Classic", "url": "https://music.apple.com"},
+    {
+        "title": "인셉션", 
+        "genre": "SF", 
+        "platform": "Netflix", 
+        "tags": ["#두뇌풀가동", "#SF", "#스릴러"], 
+        "mbti": ["INTP", "INTJ", "ENTP"], 
+        "img": "https://image.tmdb.org/t/p/w500/8Z8dptJE3vewtv4A1BnmTtoZgW3.jpg", 
+        "url": "https://www.netflix.com",
+        "summary": "타인의 꿈에 들어가 생각을 훔치는 특수 보안요원들의 이야기"
+    },
+    {
+        "title": "라라랜드", 
+        "genre": "로맨스", 
+        "platform": "Watcha", 
+        "tags": ["#로맨스", "#음악", "#감성"], 
+        "mbti": ["ENFP", "INFP", "ESFJ"], 
+        "img": "https://image.tmdb.org/t/p/w500/uDO8zWDhfWwoFdKS4fzkUJt0f...jpg", # 예시 이미지 url이 길어 잘릴 경우 대비, 실제 구현시엔 온전한 url 필요
+        "url": "https://watcha.com",
+        "summary": "재즈 피아니스트와 배우 지망생의 꿈과 사랑을 그린 뮤지컬 영화"
+    },
 ]
 
-# 세션 상태 초기화 (리뷰 저장을 위함 - 새로고침해도 날아가지 않게!)
+# (라라랜드 임시 포스터 복구용 온전한 URL)
+MOCK_DATA[1]["img"] = "https://image.tmdb.org/t/p/w500/uDO8zWDhfWwoFdKS4fzkUJt0Ry0.jpg"
+
+# 세션 상태 초기화 (리뷰 저장용)
 if 'reviews' not in st.session_state:
     st.session_state.reviews = []
 
-st.title("🎬 MBTI & 취향 기반 추천")
+st.title("🎬 MBTI & 취향 기반 영화 추천기")
 st.write("너의 MBTI와 취향을 알려주면 찰떡같은 영화를 찾아줄게!")
 
 st.divider()
 
-# --- 5번 기능: 일반 검색 및 해시태그 검색 ---
+# --- 검색 기능 ---
 st.subheader("🔍 검색하기")
 search_query = st.text_input("제목을 검색하거나, 앞에 #을 붙여서 해시태그를 검색해봐! (예: #로맨스, 인셉션)")
 
-# --- 1 & 2번 기능: MBTI 및 취향 입력 ---
-col1, col2, col3 = st.columns(3)
+# --- MBTI 및 취향 입력 ---
+col1, col2 = st.columns(2)
 
 with col1:
     mbti = st.selectbox("1. 당신의 MBTI는 무엇입니까?", 
@@ -36,23 +55,15 @@ with col2:
     genres = st.multiselect("2. 선호하는 장르는?", 
                             ["SF", "로맨스", "액션", "코미디", "스릴러", "공포", "판타지", "드라마", "범죄/느와르"])
 
-with col3:
-    platform = st.selectbox("주로 이용하는 플랫폼은?", 
-                            ["상관없음", "Netflix", "Watcha", "Disney+", "Hulu"])
-
-#col3에 플랫폼 입력 대신 이 코드에 AI를 집어넣어서 사용자의 추천에 뜬 영화가 어느 플랫폼에서 방영하는지, 그리고 그 플랫폼의 주소를 알려주기
-
 st.divider()
 
-# --- 3번 기능: 추천 리스트 로직 및 나열 ---
+# --- 추천 리스트 로직 ---
 st.subheader("✨ 당신을 위한 추천 결과")
 
-# 필터링 로직
 filtered_data = []
 for item in MOCK_DATA:
     match = True
     
-    # 검색어 필터링 (#이 있으면 태그 검색, 없으면 제목 검색)
     if search_query:
         if search_query.startswith("#"):
             if search_query not in item["tags"]:
@@ -61,64 +72,58 @@ for item in MOCK_DATA:
             if search_query.lower() not in item["title"].lower():
                 match = False
                 
-    # 입력 폼 필터링 (검색어가 없을 때만 적용하거나, 함께 적용 가능)
     if not search_query:
         if mbti != "모름" and mbti not in item["mbti"]:
             match = False
         if genres and item["genre"] not in genres:
             match = False
-        if platform != "상관없음" and item["platform"] != platform:
-            match = False
             
     if match:
         filtered_data.append(item)
 
-# 결과 출력 (이미지 클릭 시 이동 구현)
+# --- 결과 출력 및 UI 개선 ---
 if filtered_data:
     cols = st.columns(4)
     for i, item in enumerate(filtered_data):
         with cols[i % 4]:
-            # HTML을 이용해 클릭 가능한 이미지 생성 (클릭 시 새 창에서 플랫폼 이동)
-            clickable_image = f'''
-            <a href="{item['url']}" target="_blank">
-                <img src="{item['img']}" style="width:100%; border-radius:10px; cursor:pointer;" alt="{item['title']}">
-            </a>
-            '''
-            st.markdown(clickable_image, unsafe_allow_html=True)
-            st.markdown(f"**{item['title']}** ({item['platform']})")
+            # 1. 포스터 이미지 오류 수정 (st.image 사용)
+            st.image(item["img"], use_container_width=True)
+            
+            # 2. 제목, 태그, 요약 보여주기
+            st.markdown(f"**{item['title']}**")
             st.caption(" ".join(item["tags"]))
+            st.write(f"_{item['summary']}_")
+            
+            # 3. 플랫폼 바로가기 버튼 추가 (st.link_button)
+            st.link_button(f"{item['platform']}에서 바로보기 🍿", item['url'], use_container_width=True)
+            
+            # 4. 리뷰 작성/보기 아코디언 메뉴 (st.expander)
+            with st.expander("📝 리뷰 보기 및 작성"):
+                # 현재 영화에 해당하는 리뷰만 필터링
+                movie_reviews = [r for r in st.session_state.reviews if r['target'] == item['title']]
+                if movie_reviews:
+                    for rev in movie_reviews:
+                        st.markdown(f"**{rev['name']}** `{rev['mbti']}` ({rev['rating']})")
+                        st.write(f"> {rev['text']}")
+                        st.markdown("---")
+                else:
+                    st.info("아직 리뷰가 없어요. 첫 리뷰를 남겨보세요!")
+                
+                # 리뷰 작성 폼
+                with st.form(key=f"form_{item['title']}"):
+                    new_name = st.text_input("닉네임", key=f"name_{item['title']}")
+                    new_rating = st.selectbox("평점", ["⭐⭐⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐", "⭐⭐", "⭐"], key=f"rate_{item['title']}")
+                    new_text = st.text_area("리뷰 내용", key=f"text_{item['title']}")
+                    submit_review = st.form_submit_button("리뷰 등록")
+                    
+                    if submit_review and new_text:
+                        st.session_state.reviews.append({
+                            "target": item['title'],
+                            "name": new_name if new_name else "익명",
+                            "mbti": mbti if mbti != "모름" else "비공개",
+                            "rating": new_rating,
+                            "text": new_text
+                        })
+                        st.rerun() # 리뷰 등록 후 화면 새로고침
 else:
     st.info("조건에 맞는 결과가 없어요. 취향을 조금 바꿔보거나 다른 검색어를 입력해 보세요!")
-
-st.divider()
-
-# 탭 생성
-tab1, tab2 = st.tabs(["✨ 추천 유니버스", "💬 리뷰 및 평가"])
-
-with tab1:
-    # --- 1, 2, 3번 기능 (검색 및 추천 결과 출력) ---
-    st.subheader("🔍 검색하기")
-    search_query = st.text_input("제목을 검색하거나, 앞에 #을 붙여서 해시태그를 검색해봐!")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        mbti = st.selectbox("1. 당신의 MBTI는?", ["모름", "ISTJ", "ENTP", "INTJ", "ENFP"]) # 리스트 축약함
-    with col2:
-        genres = st.multiselect("2. 선호하는 장르는?", ["SF", "로맨스", "스릴러", "코미디"])
-    with col3:
-        platform = st.selectbox("주로 이용하는 플랫폼은?", ["상관없음", "Netflix", "Watcha", "Spotify"])
-        
-    # (여기에 기존 필터링 및 결과 출력 로직 그대로 삽입)
-    
-with tab2:
-    # --- 4번 기능 (리뷰 폼 및 리스트 출력) ---
-    st.subheader("리뷰 남기기")
-
-# 등록된 리뷰 보여주기
-if st.session_state.reviews:
-    st.write("### 📝 최신 리뷰 모아보기")
-    for rev in st.session_state.reviews:
-        with st.container():
-            st.markdown(f"**{rev['target']}** | {rev['rating']} | 작성자: {rev['name']} `#{rev['mbti']}`")
-            st.write(f"> {rev['text']}")
-            st.markdown("---")
