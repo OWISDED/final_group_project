@@ -15,8 +15,8 @@ MOCK_DATA = [
 if 'reviews' not in st.session_state:
     st.session_state.reviews = []
 
-st.title("🎬 MBTI & 취향 기반 추천 유니버스 🎧")
-st.write("너의 MBTI와 취향을 알려주면 찰떡같은 영화와 음악을 찾아줄게!")
+st.title("🎬 MBTI & 취향 기반 추천")
+st.write("너의 MBTI와 취향을 알려주면 찰떡같은 영화를 찾아줄게!")
 
 st.divider()
 
@@ -34,11 +34,13 @@ with col1:
 
 with col2:
     genres = st.multiselect("2. 선호하는 장르는?", 
-                            ["SF", "로맨스", "스릴러", "코미디", "K-POP", "팝송", "클래식", "힙합"])
+                            ["SF", "로맨스", "액션", "코미디", "스릴러", "공포", "판타지", "드라마", "범죄/느와르"])
 
 with col3:
     platform = st.selectbox("주로 이용하는 플랫폼은?", 
-                            ["상관없음", "Netflix", "Watcha", "Spotify", "Apple Music", "YouTube Music"])
+                            ["상관없음", "Netflix", "Watcha", "Disney+", "Hulu"])
+
+#col3에 플랫폼 입력 대신 이 코드에 AI를 집어넣어서 사용자의 추천에 뜬 영화가 어느 플랫폼에서 방영하는지, 그리고 그 플랫폼의 주소를 알려주기
 
 st.divider()
 
@@ -120,6 +122,3 @@ if st.session_state.reviews:
             st.markdown(f"**{rev['target']}** | {rev['rating']} | 작성자: {rev['name']} `#{rev['mbti']}`")
             st.write(f"> {rev['text']}")
             st.markdown("---")
-
-
-#수정요소
