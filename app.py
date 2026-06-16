@@ -53,8 +53,8 @@ if 'last_mbti' not in st.session_state:
 # 4. 로그인 & 회원가입 화면
 # ---------------------------------------------------------
 if not st.session_state.logged_in:
-    st.title("🎬 영화 추천 서비스")
-    st.write("나의 MBTI에 딱 맞는 영화를 추천받아보세요!")
+    st.title("🎬 MoodFlix")
+    st.write("당신의 감성 유형에 맞는 영화를 추천받아보세요.")
     
     tab1, tab2 = st.tabs(["🔑 로그인", "📝 회원가입"])
     
@@ -80,9 +80,30 @@ if not st.session_state.logged_in:
         with st.form("signup_form"):
             new_id = st.text_input("새 아이디")
             new_pw = st.text_input("새 비밀번호", type="password")
-            new_mbti = st.selectbox("당신의 MBTI는?", 
-                        ["ISTJ", "ISFJ", "INFJ", "INTJ", "ISTP", "ISFP", "INFP", "INTP", 
-                         "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ"])
+            new_mbti = st.selectbox(
+    "🌙 당신의 감성 유형을 선택하세요",
+    [
+        "🌙 감성 몽상가",
+        "🌌 별빛 수집가",
+        "🌧️ 비 내리는 철학자",
+        "🕯️ 추억 여행자",
+
+        "🌸 로맨틱 드리머",
+        "🍃 마음 치유사",
+        "☕ 카페 속 이야기꾼",
+        "🎨 감성 예술가",
+
+        "🧙 세계 탐험가",
+        "🚀 우주 개척자",
+        "🐉 판타지 수호자",
+        "🗺️ 모험 설계자",
+
+        "🔥 도파민 탐험가",
+        "⚡ 스릴 헌터",
+        "🕶️ 전략가",
+        "👑 카리스마 지휘관"
+    ]
+)
             submit_signup = st.form_submit_button("가입하기")
             
             if submit_signup:
@@ -106,9 +127,9 @@ if not st.session_state.logged_in:
 # =========================================================
 cols = st.columns([8, 2])
 with cols[0]:
-    st.title("🎬 MBTI & 취향 기반 추천")
+    st.title("🎬 MoodFlix 감성 큐레이션")
 with cols[1]:
-    st.write(f"**{st.session_state.current_user}**님 (`{st.session_state.current_user_mbti}`) 환영합니다!")
+    st.write(f"**{st.session_state.current_user}**님 환영합니다!")
     if st.button("로그아웃"):
         st.session_state.logged_in = False
         st.session_state.current_user = ""
@@ -262,9 +283,9 @@ def fetch_movies_by_mbti(mbti_type):
 # ---------------------------------------------------------
 # 6. 영화 추천 및 리뷰 UI 
 # ---------------------------------------------------------
-st.subheader("🔍 내 MBTI에 맞는 추천작 보기")
+st.subheader("🔍 내 감성 유형에 맞는 추천작 보기")
 current_mbti_idx = list(MBTI_MAPPING.keys()).index(st.session_state.current_user_mbti)
-selected_mbti = st.selectbox("어떤 MBTI의 추천 영화를 볼까요?", list(MBTI_MAPPING.keys()), index=current_mbti_idx)
+selected_mbti = st.selectbox("어떤 감성 유형을 볼까요?", list(MBTI_MAPPING.keys()), index=current_mbti_idx)
 
 # MBTI를 새로 선택하면 화면에 보여줄 영화 개수를 다시 8개로 초기화
 if st.session_state.last_mbti != selected_mbti:
