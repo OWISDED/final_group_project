@@ -301,9 +301,7 @@ if not st.session_state.test_done:
     st.stop() # 버튼을 누르기 전까지는 하단 영화 추천 코드가 보이지 않도록 대기
 # ⭐⭐⭐ 여기까지 추가 ⭐⭐⭐
 
-st.subheader("🔍 내 MBTI에 맞는 추천작 보기")
 st.subheader("🔍 내 감성 유형에 맞는 추천작 보기")
-current_mbti_idx = list(MBTI_MAPPING.keys()).index(st.session_state.current_user_mbti)
 selected_mbti = st.session_state.mood_result if st.session_state.mood_result else st.session_state.current_user_mbti
 # MBTI를 새로 선택하면 화면에 보여줄 영화 개수를 다시 8개로 초기화
 if st.session_state.last_mbti != selected_mbti:
