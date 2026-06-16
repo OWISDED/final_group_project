@@ -1,0 +1,3 @@
+# .gitignore 파일 안의 내용
+firebase_key.json
+.streamlit/secrets.toml

@@ -291,8 +291,14 @@ def fetch_movies_by_mbti(mbti_type):
 # ⭐⭐⭐ 여기부터 추가 ⭐⭐⭐
 if not st.session_state.test_done:
     st.title("🌙 MoodFlix 감성 테스트")
-    ...
-    st.stop()
+    st.info("현재 감성 테스트 기능은 준비 중입니다. 🚧")
+    
+    # 사용자가 이 구간을 빠져나갈 수 있는 탈출구(버튼) 마련
+    if st.button("테스트 건너뛰고 영화 추천받기 🚀", use_container_width=True):
+        st.session_state.test_done = True  # 상태를 True로 변경
+        st.rerun()  # 화면을 새로고침하여 이 if문을 빠져나가게 함
+        
+    st.stop() # 버튼을 누르기 전까지는 하단 영화 추천 코드가 보이지 않도록 대기
 # ⭐⭐⭐ 여기까지 추가 ⭐⭐⭐
 
 st.subheader("🔍 내 MBTI에 맞는 추천작 보기")
