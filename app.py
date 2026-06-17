@@ -8,6 +8,69 @@ import json
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MBTI 취향 저격 추천기", page_icon="🎬", layout="wide")
+st.markdown("""
+<style>
+
+/* 전체 배경 */
+.stApp {
+    background-color: #FAFAFF;
+}
+
+/* 제목 */
+h1, h2, h3 {
+    color: #1A1A1A;
+    text-align: center;
+    font-weight: 700;
+}
+
+/* 버튼 */
+div.stButton > button:first-child {
+    background-color: #E6E6FA;
+    color: #1A1A1A;
+    border: 2px solid #DCD0FF;
+    border-radius: 15px;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: bold;
+    width: 100%;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+}
+
+/* 버튼 호버 */
+div.stButton > button:first-child:hover {
+    background-color: #B026FF;
+    color: white;
+    border-color: #9000FF;
+    transform: scale(0.98);
+    box-shadow: 0 0 15px rgba(176,38,255,0.5);
+}
+
+/* 입력창 */
+.stTextInput input,
+.stTextArea textarea {
+    border-radius: 12px !important;
+}
+
+/* SelectBox */
+.stSelectbox div[data-baseweb="select"] {
+    border-radius: 12px;
+}
+
+/* 이미지 */
+img {
+    border-radius: 14px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+.movie-card {
+    background:white;
+    padding:15px;
+    border-radius:18px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.08);
+    margin-bottom:20px;
+}
 
 # ---------------------------------------------------------
 # 1. 보안 설정: Streamlit 금고에서 TMDB API 키 가져오기
@@ -57,8 +120,17 @@ if 'test_done' not in st.session_state:
 # 4. 로그인 & 회원가입 화면
 # ---------------------------------------------------------
 if not st.session_state.logged_in:
-    st.title("🎬 MoodFlix")
-    st.write("당신의 감성 유형에 맞는 영화를 추천받아보세요.")
+   st.markdown("""
+<h1 style='text-align:center;'>
+💜 MoodFlix
+</h1>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<p style='text-align:center;font-size:18px;'>
+당신의 감성 유형에 맞는 영화를 추천받아보세요
+</p>
+""", unsafe_allow_html=True)
     
     tab1, tab2 = st.tabs(["🔑 로그인", "📝 회원가입"])
     
@@ -131,9 +203,27 @@ if not st.session_state.logged_in:
 # =========================================================
 cols = st.columns([8, 2])
 with cols[0]:
+    st.image(
+    "https://cdn-icons-png.flaticon.com/512/8208/8208643.png",
+    width=120
+)
     st.title("🎬 MoodFlix 감성 큐레이션")
 with cols[1]:
-    st.write(f"**{st.session_state.current_user}**님 환영합니다!")
+    st.markdown(
+f"""
+<div style="
+background:linear-gradient(90deg,#E6E6FA,#F3E8FF);
+padding:12px;
+border-radius:15px;
+text-align:center;
+font-weight:bold;
+margin-bottom:10px;
+">
+💜 {st.session_state.current_user}님 환영합니다!
+</div>
+""",
+unsafe_allow_html=True
+)
     if st.button("로그아웃"):
         st.session_state.logged_in = False
         st.session_state.current_user = ""
@@ -308,7 +398,7 @@ if st.session_state.last_mbti != selected_mbti:
     st.session_state.movie_limit = 8
     st.session_state.last_mbti = selected_mbti
 
-with st.spinner('해외 서버에서 영화 데이터를 가져오는 중입니다... 🍿'):
+with st.spinner('💜 당신의 감성을 분석하는 중이에요...'):
     # 캐싱된 함수 호출 (최대 24개의 데이터 로드)
     ALL_RECOMMENDED_MOVIES = fetch_movies_by_mbti(selected_mbti)
 
@@ -329,11 +419,13 @@ if ALL_RECOMMENDED_MOVIES:
     cols = st.columns(4)
     for i, item in enumerate(movies_to_display):
         with cols[i % 4]:
+            st.markdown('<div class="movie-card">', unsafe_allow_html=True)
             st.image(item["img"], use_container_width=True)
             st.markdown(f"**{item['title']}**")
             st.caption(" ".join(item["tags"]))
             st.write(f"_{item['summary']}_")
             st.link_button(f"{item['platform']}에서 바로보기 🍿", item['url'], use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
             
             # --- 리뷰 기능 ---
             with st.expander("📝 리뷰 보기 및 작성"):
