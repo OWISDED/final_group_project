@@ -62,8 +62,6 @@ img {
     border-radius: 14px;
 }
 
-</style>
-""", unsafe_allow_html=True)
 .movie-card {
     background:white;
     padding:15px;
@@ -71,7 +69,8 @@ img {
     box-shadow:0 4px 12px rgba(0,0,0,0.08);
     margin-bottom:20px;
 }
-
+</style>
+""", unsafe_allow_html=True)
 # ---------------------------------------------------------
 # 1. 보안 설정: Streamlit 금고에서 TMDB API 키 가져오기
 # ---------------------------------------------------------
@@ -120,18 +119,19 @@ if 'test_done' not in st.session_state:
 # 4. 로그인 & 회원가입 화면
 # ---------------------------------------------------------
 if not st.session_state.logged_in:
-   st.markdown("""
-<h1 style='text-align:center;'>
-💜 MoodFlix
-</h1>
-""", unsafe_allow_html=True)
 
-st.markdown("""
-<p style='text-align:center;font-size:18px;'>
-당신의 감성 유형에 맞는 영화를 추천받아보세요
-</p>
-""", unsafe_allow_html=True)
-    
+    st.markdown("""
+    <h1 style='text-align:center;'>
+    💜 MoodFlix
+    </h1>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <p style='text-align:center;font-size:18px;'>
+    당신의 감성 유형에 맞는 영화를 추천받아보세요
+    </p>
+    """, unsafe_allow_html=True)
+
     tab1, tab2 = st.tabs(["🔑 로그인", "📝 회원가입"])
     
     with tab1:
