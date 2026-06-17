@@ -1,0 +1,245 @@
+import streamlit as st
+import requests
+import time
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+import json
+
+# =========================================================
+# 🎨 0. 페이지 설정
+# =========================================================
+st.set_page_config(page_title="MoodFlix", page_icon="💜", layout="wide")
+
+# =========================================================
+# 💜 1. 감성 UI (첫 번째 코드 스타일 + 업그레이드)
+# =========================================================
+st.markdown("""
+<style>
+    /* 전체 배경 */
+    .stApp {
+        background-color: #FAFAFF;
+    }
+
+    /* 제목 */
+    h1, h2, h3 {
+        color: #1A1A1A;
+        text-align: center;
+        font-family: 'Gothic A1', sans-serif;
+        font-weight: 700;
+    }
+
+    /* 버튼 */
+    div.stButton > button:first-child {
+        background-color: #E6E6FA;
+        color: #1A1A1A;
+        border: 2px solid #DCD0FF;
+        border-radius: 14px;
+        padding: 14px;
+        font-size: 16px;
+        font-weight: 600;
+        width: 100%;
+        transition: all 0.25s ease;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+    }
+
+    div.stButton > button:first-child:hover {
+        background-color: #B026FF;
+        color: white;
+        border-color: #9000FF;
+        transform: scale(0.98);
+        box-shadow: 0 0 18px rgba(176, 38, 255, 0.5);
+    }
+
+    /* 이미지 카드 느낌 */
+    img {
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# =========================================================
+# 🔐 2. API / Firebase
+# =========================================================
+try:
+    TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
+except:
+    st.error("TMDB API 키 없음")
+    st.stop()
+
+if not firebase_admin._apps:
+    try:
+        raw_json = st.secrets["FIREBASE_JSON"].replace("\n", "").replace("\r", "")
+        firebase_secrets = json.loads(raw_json)
+        cred = credentials.Certificate(firebase_secrets)
+        firebase_admin.initialize_app(cred)
+    except Exception as e:
+        st.error(f"Firebase 오류: {e}")
+        st.stop()
+
+db = firestore.client()
+
+# =========================================================
+# 👤 3. 세션 상태
+# =========================================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "current_user" not in st.session_state:
+    st.session_state.current_user = ""
+if "current_user_mbti" not in st.session_state:
+    st.session_state.current_user_mbti = ""
+if "movie_limit" not in st.session_state:
+    st.session_state.movie_limit = 8
+
+# =========================================================
+# 🎭 4. MBTI 감성 매핑
+# =========================================================
+MBTI_MAPPING = {
+    "🌙 감성 몽상가": {"genre": "18", "tags": ["#감성", "#잔잔"]},
+    "🌌 별빛 수집가": {"genre": "10749", "tags": ["#로맨스"]},
+    "🌧️ 비 내리는 철학자": {"genre": "9648", "tags": ["#미스터리"]},
+    "🕯️ 추억 여행자": {"genre": "36", "tags": ["#역사"]},
+    "🌸 로맨틱 드리머": {"genre": "10749", "tags": ["#설렘"]},
+    "🍃 마음 치유사": {"genre": "10751", "tags": ["#힐링"]},
+    "☕ 카페 속 이야기꾼": {"genre": "35", "tags": ["#코미디"]},
+    "🎨 감성 예술가": {"genre": "10402", "tags": ["#음악"]},
+    "🧙 세계 탐험가": {"genre": "12", "tags": ["#모험"]},
+    "🚀 우주 개척자": {"genre": "878", "tags": ["#SF"]},
+    "🐉 판타지 수호자": {"genre": "14", "tags": ["#판타지"]},
+    "🗺️ 모험 설계자": {"genre": "28", "tags": ["#액션"]},
+    "🔥 도파민 탐험가": {"genre": "28", "tags": ["#액션"]},
+    "⚡ 스릴 헌터": {"genre": "53", "tags": ["#스릴러"]},
+    "🕶️ 전략가": {"genre": "80", "tags": ["#범죄"]},
+    "👑 카리스마 지휘관": {"genre": "10752", "tags": ["#전쟁"]}
+}
+
+# =========================================================
+# 🔗 5. 링크
+# =========================================================
+def get_direct_link(title):
+    return f"https://www.google.com/search?q={title}+영화"
+
+# =========================================================
+# 🎬 6. TMDB (안정화 버전)
+# =========================================================
+@st.cache_data(show_spinner=False)
+def fetch_movies_by_mbti(mbti_type):
+
+    if mbti_type not in MBTI_MAPPING:
+        return []
+
+    genre_id = MBTI_MAPPING[mbti_type]["genre"]
+    tags = MBTI_MAPPING[mbti_type]["tags"]
+
+    movies = []
+
+    for page in range(1, 3):
+        url = (
+            f"https://api.themoviedb.org/3/discover/movie"
+            f"?api_key={TMDB_API_KEY}"
+            f"&language=ko-KR"
+            f"&with_genres={genre_id}"
+            f"&sort_by=popularity.desc"
+            f"&vote_count.gte=500"
+            f"&page={page}"
+        )
+
+        try:
+            data = requests.get(url, timeout=5).json()
+        except:
+            continue
+
+        for m in data.get("results", []):
+
+            if len(movies) >= 24:
+                break
+
+            movie_id = m.get("id")
+            if not movie_id:
+                continue
+
+            # provider 안전 처리
+            platform = "Google 검색"
+            try:
+                p_url = f"https://api.themoviedb.org/3/movie/{movie_id}/watch/providers?api_key={TMDB_API_KEY}"
+                p_data = requests.get(p_url, timeout=5).json()
+                kr = p_data.get("results", {}).get("KR", {})
+                if kr.get("flatrate"):
+                    platform = kr["flatrate"][0].get("provider_name", "Google 검색")
+            except:
+                pass
+
+            movies.append({
+                "title": m.get("title", ""),
+                "img": f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}",
+                "summary": (m.get("overview") or "")[:80],
+                "tags": tags,
+                "platform": platform,
+                "url": get_direct_link(m.get("title", ""))
+            })
+
+    return movies
+
+# =========================================================
+# 🔐 7. 로그인 체크
+# =========================================================
+if not st.session_state.logged_in:
+    st.title("💜 MoodFlix")
+    st.info("로그인이 필요합니다.")
+    st.stop()
+
+# =========================================================
+# 🎬 8. 현재 사용자 MBTI
+# =========================================================
+selected_mbti = st.session_state.current_user_mbti
+
+if not selected_mbti or selected_mbti not in MBTI_MAPPING:
+    st.error("MBTI 정보 없음")
+    st.stop()
+
+# =========================================================
+# 🍿 9. 데이터
+# =========================================================
+movies = fetch_movies_by_mbti(selected_mbti)
+
+st.title("💜 MoodFlix 추천")
+
+st.caption(f"👤 {st.session_state.current_user}님 환영합니다")
+
+# =========================================================
+# 🎨 10. 감성 로딩 효과
+# =========================================================
+with st.spinner("당신의 감성을 분석 중... 💜"):
+    time.sleep(0.5)
+
+# =========================================================
+# 🎬 11. UI 출력 (감성 카드형)
+# =========================================================
+if movies:
+
+    cols = st.columns(4)
+
+    for i, m in enumerate(movies[:st.session_state.movie_limit]):
+
+        with cols[i % 4]:
+            st.image(m["img"], use_container_width=True)
+            st.markdown(f"**{m['title']}**")
+            st.caption(" ".join(m["tags"]))
+            st.write(m["summary"])
+            st.link_button(f"{m['platform']} ▶", m["url"], use_container_width=True)
+
+            st.markdown("---")
+            st.markdown("💜 감성 한 줄 리뷰")
+
+            review = st.text_input("리뷰", key=f"r_{i}")
+            if st.button("등록", key=f"b_{i}"):
+                db.collection("reviews").document(str(time.time())).set({
+                    "target": m["title"],
+                    "user": st.session_state.current_user,
+                    "text": review
+                })
+                st.success("저장 완료!")
+
+else:
+    st.info("추천 영화 없음")
