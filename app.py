@@ -340,4 +340,3 @@ elif st.session_state.step == 4:
         st.session_state.movie_limit = 4
         st.session_state.celebrated = False
         st.rerun()
-        
