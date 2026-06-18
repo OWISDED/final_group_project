@@ -3,7 +3,10 @@
 사이트 주소 : https://bqpfnckfndena3tsavnxet.streamlit.app/
 
 실제로 보이는 웹사이트 모습 : 
-<img width="1440" height="775" alt="Screenshot 2026-06-05 at 10 56 16 PM" src="https://github.com/user-attachments/assets/0b3383bd-c5c0-4cb9-98eb-ec66dfde4d76" />
+<img width="1440" height="777" alt="Screenshot 2026-06-17 at 5 15 17 AM" src="https://github.com/user-attachments/assets/63f43e17-95ae-4aa1-a4a6-f6d829698096" />
+<img width="1440" height="730" alt="Screenshot 2026-06-17 at 5 15 33 AM" src="https://github.com/user-attachments/assets/7cbf910a-5758-4c63-9b48-2944354eb75a" />
 
-1. 전반적인 코딩 (검색기능 / 영화, 음악 데이터 / 리뷰 기능 등등) : 김지환
-2. 디자인 : 모건영
+
+
+1. 전반적인 코딩 (로그인 / 영화 데이터 / 리뷰 기능 / 바로 보러 가기 등등) : 김지환
+2. 감성테스트 기능 등 : 모건영

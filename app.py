@@ -4,6 +4,24 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import json
+import time
+
+# ==========================================
+# 페이지 설정
+# ==========================================
+
+st.set_page_config(
+    page_title="MoodFlix",
+    page_icon="💜",
+    layout="centered"
+)
+
+# ==========================================
+# 디자인
+# ==========================================
+
+st.markdown("""
+<style>
 
 # ==========================================
 # 페이지 설정
@@ -84,6 +102,7 @@ if not firebase_admin._apps:
         firebase_json = json.loads(st.secrets["FIREBASE_JSON"])
         cred = credentials.Certificate(firebase_json)
         firebase_admin.initialize_app(cred)
+
     except Exception as e:
         st.error(f"Firebase 오류: {e}")
         st.stop()
@@ -172,7 +191,9 @@ if not st.session_state.logged_in:
     # 로그인
     # -------------------
     with tab1:
+
         with st.form("login_form"):
+
             login_id = st.text_input("아이디")
             login_pw = st.text_input("비밀번호", type="password")
             login_submit = st.form_submit_button("입장하기")
@@ -183,8 +204,10 @@ if not st.session_state.logged_in:
 
                 if user_doc.exists and user_doc.to_dict()["pw"] == login_pw:
                     st.session_state.logged_in = True
+
                     st.session_state.current_user = login_id
                     st.rerun()
+
                 else:
                     st.error("아이디 또는 비밀번호가 틀렸습니다.")
 
@@ -192,7 +215,9 @@ if not st.session_state.logged_in:
     # 회원가입
     # -------------------
     with tab2:
+
         with st.form("signup_form"):
+
             new_id = st.text_input("새 아이디")
             new_pw = st.text_input("새 비밀번호", type="password")
             signup_submit = st.form_submit_button("회원가입")
@@ -205,7 +230,11 @@ if not st.session_state.logged_in:
                 else:
                     user_ref = db.collection("users").document(new_id)
                     if user_ref.get().exists:
-                        st.error("이미 존재하는 아이디입니다.")
+
+                        st.error(
+                            "이미 존재하는 아이디입니다."
+                        )
+
                     else:
                         user_ref.set({"pw": new_pw})
                         st.success("회원가입 완료!")
