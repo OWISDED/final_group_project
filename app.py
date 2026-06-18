@@ -1,386 +1,342 @@
 import streamlit as st
 import requests
-import time
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import json
 
-# 페이지 기본 설정
-st.set_page_config(page_title="MBTI 취향 저격 추천기", page_icon="🎬", layout="wide")
+# ==========================================
+# 페이지 설정
+# ==========================================
 
-# ---------------------------------------------------------
-# 1. 보안 설정: Streamlit 금고에서 TMDB API 키 가져오기
-# ---------------------------------------------------------
+st.set_page_config(
+    page_title="MoodFlix",
+    page_icon="💜",
+    layout="centered"
+)
+
+# ==========================================
+# 디자인
+# ==========================================
+
+st.markdown("""
+<style>
+/* 전체 배경 */
+.stApp {
+    background-color: #FAFAFF;
+}
+
+/* 제목 */
+h1,h2,h3 {
+    text-align:center;
+}
+
+/* 버튼 */
+div.stButton > button:first-child {
+    background-color:#E6E6FA;
+    color:black;
+    border-radius:15px;
+    border:2px solid #DCD0FF;
+    font-weight:bold;
+    transition:0.3s;
+}
+
+div.stButton > button:first-child:hover {
+    background-color:#B026FF;
+    color:white;
+}
+
+/* 입력창 */
+.stTextInput input,
+.stTextArea textarea {
+    background-color:white !important;
+    color:black !important;
+    border-radius:10px;
+}
+
+/* 카드 */
+.movie-card {
+    background:white;
+    padding:15px;
+    border-radius:18px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.08);
+    margin-bottom:15px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# API KEY
+# ==========================================
+
 try:
     TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
-except KeyError:
-    st.error("⚠️ 클라우드 Secrets에 TMDB_API_KEY가 없습니다! 설정을 확인해주세요.")
+except:
+    st.error("TMDB_API_KEY가 없습니다.")
     st.stop()
 
-# ---------------------------------------------------------
-# 2. Firebase 초기화 및 DB 연동 (클라우드 배포용)
-# ---------------------------------------------------------
+# ==========================================
+# Firebase
+# ==========================================
+
 if not firebase_admin._apps:
     try:
-        raw_json = st.secrets["FIREBASE_JSON"].replace('\n', '').replace('\r', '')
-        firebase_secrets = json.loads(raw_json)
-        cred = credentials.Certificate(firebase_secrets)
+        firebase_json = json.loads(st.secrets["FIREBASE_JSON"])
+        cred = credentials.Certificate(firebase_json)
         firebase_admin.initialize_app(cred)
     except Exception as e:
-        st.error(f"⚠️ 파이어베이스 연동 에러가 발생했습니다: {e}")
+        st.error(f"Firebase 오류: {e}")
         st.stop()
 
-# Firestore 데이터베이스 객체 생성
 db = firestore.client()
 
-# ---------------------------------------------------------
-# 3. 세션 상태 초기화 (현재 접속자 정보 및 화면 상태 기억)
-# ---------------------------------------------------------
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'current_user' not in st.session_state:
-    st.session_state.current_user = ""
-if 'current_user_mbti' not in st.session_state:
-    st.session_state.current_user_mbti = ""
-# 더보기 버튼을 위한 영화 표시 개수 상태
-if 'movie_limit' not in st.session_state:
-    st.session_state.movie_limit = 8
-if 'last_mbti' not in st.session_state:
-    st.session_state.last_mbti = ""
-if 'mood_result' not in st.session_state:
-    st.session_state.mood_result = ""
-if 'test_done' not in st.session_state:
-    st.session_state.test_done = False
+# ==========================================
+# 세션 상태
+# ==========================================
 
-# ---------------------------------------------------------
-# 4. 로그인 & 회원가입 화면
-# ---------------------------------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "current_user" not in st.session_state:
+    st.session_state.current_user = ""
+if "step" not in st.session_state:
+    st.session_state.step = 0
+if "answers" not in st.session_state:
+    st.session_state.answers = []
+if "movie_limit" not in st.session_state:
+    st.session_state.movie_limit = 4
+if "celebrated" not in st.session_state:
+    st.session_state.celebrated = False
+
+# ==========================================
+# MBTI 데이터
+# ==========================================
+
+MOOD_PROFILES = {
+    "INFP":{"title":"새벽 세 시, 빗소리를 닮은 몽상가","genre":"18"},
+    "INFJ":{"title":"깊은 밤, 숨겨진 의미를 찾는 철학자","genre":"9648"},
+    "ENFP":{"title":"네온사인 아래 춤추는 페스티벌 러버","genre":"10749"},
+    "ENFJ":{"title":"다 함께 울고 웃는 심야 극장의 영웅","genre":"10751"},
+    "INTP":{"title":"조용한 다락방의 분석가","genre":"878"},
+    "INTJ":{"title":"안개 낀 심야 영화관의 설계자","genre":"53"},
+    "ENTP":{"title":"반전 무비 디렉터","genre":"80"},
+    "ENTJ":{"title":"마스터 프로듀서","genre":"28"},
+    "ISFP":{"title":"헤드폰 속 우주의 아티스트","genre":"10402"},
+    "ISFJ":{"title":"기억 보관자","genre":"36"},
+    "ESFP":{"title":"스포트라이트 팝스타","genre":"10402"},
+    "ESFJ":{"title":"취향 공유 호스트","genre":"35"},
+    "ISTP":{"title":"시네마 스나이퍼","genre":"28"},
+    "ISTJ":{"title":"클래식 수집가","genre":"36"},
+    "ESTP":{"title":"스릴 러버","genre":"28"},
+    "ESTJ":{"title":"명작 큐레이터","genre":"18"}
+}
+
+# ==========================================
+# 영화 API 호출 함수
+# ==========================================
+
+@st.cache_data(show_spinner=False)
+def fetch_movies(genre_id):
+    discover_url = (
+        f"https://api.themoviedb.org/3/discover/movie"
+        f"?api_key={TMDB_API_KEY}"
+        f"&language=ko-KR"
+        f"&sort_by=popularity.desc"
+        f"&with_genres={genre_id}"
+        f"&vote_count.gte=500"
+        f"&page=1"
+    )
+    res = requests.get(discover_url).json()
+    return res.get("results", [])[:20]
+
+
+# ==========================================
+# 로그인 / 회원가입
+# ==========================================
+
 if not st.session_state.logged_in:
-    st.title("🎬 MoodFlix")
-    st.write("당신의 감성 유형에 맞는 영화를 추천받아보세요.")
-    
+    st.markdown("""
+    <h1 style='text-align:center;color:#7B2FF7;'>
+    💜 MoodFlix
+    </h1>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <p style='text-align:center;font-size:18px;'>
+    당신의 미디어 감성 DNA를 찾아보세요
+    </p>
+    """, unsafe_allow_html=True)
+
     tab1, tab2 = st.tabs(["🔑 로그인", "📝 회원가입"])
-    
+
+    # -------------------
+    # 로그인
+    # -------------------
     with tab1:
         with st.form("login_form"):
             login_id = st.text_input("아이디")
             login_pw = st.text_input("비밀번호", type="password")
-            submit_login = st.form_submit_button("입장하기")
-            
-            if submit_login:
-                user_ref = db.collection('users').document(login_id)
+            login_submit = st.form_submit_button("입장하기")
+
+            if login_submit:
+                user_ref = db.collection("users").document(login_id)
                 user_doc = user_ref.get()
-                
-                if user_doc.exists and user_doc.to_dict().get('pw') == login_pw:
+
+                if user_doc.exists and user_doc.to_dict()["pw"] == login_pw:
                     st.session_state.logged_in = True
                     st.session_state.current_user = login_id
-                    st.session_state.current_user_mbti = user_doc.to_dict().get('mbti')
                     st.rerun()
                 else:
-                    st.error("아이디가 존재하지 않거나 비밀번호가 틀렸습니다!")
+                    st.error("아이디 또는 비밀번호가 틀렸습니다.")
 
+    # -------------------
+    # 회원가입
+    # -------------------
     with tab2:
         with st.form("signup_form"):
             new_id = st.text_input("새 아이디")
             new_pw = st.text_input("새 비밀번호", type="password")
-            new_mbti = st.selectbox(
-    "🌙 당신의 감성 유형을 선택하세요",
-    [
-        "🌙 감성 몽상가",
-        "🌌 별빛 수집가",
-        "🌧️ 비 내리는 철학자",
-        "🕯️ 추억 여행자",
+            signup_submit = st.form_submit_button("회원가입")
 
-        "🌸 로맨틱 드리머",
-        "🍃 마음 치유사",
-        "☕ 카페 속 이야기꾼",
-        "🎨 감성 예술가",
-
-        "🧙 세계 탐험가",
-        "🚀 우주 개척자",
-        "🐉 판타지 수호자",
-        "🗺️ 모험 설계자",
-
-        "🔥 도파민 탐험가",
-        "⚡ 스릴 헌터",
-        "🕶️ 전략가",
-        "👑 카리스마 지휘관"
-    ]
-)
-            submit_signup = st.form_submit_button("가입하기")
-            
-            if submit_signup:
-                if len(new_id) < 2 or len(new_pw) < 4:
-                    st.warning("아이디는 2자, 비밀번호는 4자 이상 입력해주세요.")
+            if signup_submit:
+                if len(new_id) < 2:
+                    st.warning("아이디는 2자 이상 입력해주세요.")
+                elif len(new_pw) < 4:
+                    st.warning("비밀번호는 4자 이상 입력해주세요.")
                 else:
-                    user_ref = db.collection('users').document(new_id)
+                    user_ref = db.collection("users").document(new_id)
                     if user_ref.get().exists:
                         st.error("이미 존재하는 아이디입니다.")
                     else:
-                        user_ref.set({
-                            'pw': new_pw,
-                            'mbti': new_mbti
-                        })
-                        st.success("회원가입 완료! 로그인 탭에서 로그인해주세요.")
-                    
+                        user_ref.set({"pw": new_pw})
+                        st.success("회원가입 완료!")
     st.stop()
 
-# =========================================================
-# 5. 메인 화면 (로그인 성공 시 출력)
-# =========================================================
-cols = st.columns([8, 2])
+# ==========================================
+# 테스트 공통 함수
+# ==========================================
+
+def next_step(answer):
+    st.session_state.answers.append(answer)
+    st.session_state.step += 1
+    st.rerun()
+
+# ==========================================
+# 로그인 후 메인 화면
+# ==========================================
+
+cols = st.columns([8,2])
 with cols[0]:
-    st.title("🎬 MoodFlix 감성 큐레이션")
+    st.markdown("""
+    <h1 style='text-align:left;color:#7B2FF7;'>
+    💜 MoodFlix
+    </h1>
+    """, unsafe_allow_html=True)
 with cols[1]:
-    st.write(f"**{st.session_state.current_user}**님 환영합니다!")
-    if st.button("로그아웃"):
-        st.session_state.logged_in = False
-        st.session_state.current_user = ""
-        st.rerun()
+   if st.button("로그아웃"):
+    st.session_state.logged_in = False
+    st.session_state.current_user = ""
+    st.session_state.step = 0
+    st.session_state.answers = []
+    st.session_state.movie_limit = 4
+    st.session_state.celebrated = False
+    st.rerun()
 
 st.divider()
 
-# --- MoodFlix 감성 유형 데이터 ---
-MBTI_MAPPING = {
-
-    "🌙 감성 몽상가": {
-        "genre": "18",
-        "tags": ["#잔잔한", "#여운", "#감성", "#눈물버튼"]
-    },
-
-    "🌌 별빛 수집가": {
-        "genre": "10749",
-        "tags": ["#밤감성", "#사랑", "#설렘", "#몽환적"]
-    },
-
-    "🌧️ 비 내리는 철학자": {
-        "genre": "9648",
-        "tags": ["#생각하게하는", "#철학", "#심리", "#반전"]
-    },
-
-    "🕯️ 추억 여행자": {
-        "genre": "36",
-        "tags": ["#과거", "#추억", "#실화", "#역사"]
-    },
-
-
-    "🌸 로맨틱 드리머": {
-        "genre": "10749",
-        "tags": ["#첫사랑", "#설렘", "#로맨스", "#행복"]
-    },
-
-    "🍃 마음 치유사": {
-        "genre": "10751",
-        "tags": ["#따뜻한", "#힐링", "#가족", "#위로"]
-    },
-
-    "☕ 카페 속 이야기꾼": {
-        "genre": "35",
-        "tags": ["#일상", "#웃음", "#편안함", "#소소함"]
-    },
-
-    "🎨 감성 예술가": {
-        "genre": "10402",
-        "tags": ["#음악", "#영상미", "#예술", "#분위기"]
-    },
-
-
-    "🧙 세계 탐험가": {
-        "genre": "12",
-        "tags": ["#모험", "#새로운세계", "#성장", "#여행"]
-    },
-
-    "🚀 우주 개척자": {
-        "genre": "878",
-        "tags": ["#SF", "#미래", "#우주", "#상상력"]
-    },
-
-    "🐉 판타지 수호자": {
-        "genre": "14",
-        "tags": ["#마법", "#전설", "#신비", "#판타지"]
-    },
-
-    "🗺️ 모험 설계자": {
-        "genre": "28",
-        "tags": ["#액션", "#도전", "#스릴", "#짜릿함"]
-    },
-
-
-    "🔥 도파민 탐험가": {
-        "genre": "28",
-        "tags": ["#속도감", "#폭발", "#전투", "#아드레날린"]
-    },
-
-    "⚡ 스릴 헌터": {
-        "genre": "53",
-        "tags": ["#긴장감", "#공포", "#반전", "#몰입"]
-    },
-
-    "🕶️ 전략가": {
-        "genre": "80",
-        "tags": ["#범죄", "#두뇌싸움", "#치밀함", "#심리전"]
-    },
-
-    "👑 카리스마 지휘관": {
-        "genre": "10752",
-        "tags": ["#전쟁", "#대서사시", "#리더십", "#압도적"]
-    }
-
-}
-
-# --- 플랫폼 바로가기 링크 생성 ---
-def get_direct_link(platform, title):
-    if platform == "Netflix":
-        return f"https://www.netflix.com/search?q={title}"
-    elif platform == "Watcha":
-        return f"https://watcha.com/search?query={title}"
-    elif platform == "Disney Plus":
-        return f"https://www.disneyplus.com/search?q={title}"
-    elif platform == "Wavve":
-        return f"https://www.wavve.com/search/search?searchWord={title}"
-    else:
-        return f"https://www.google.com/search?q={title}+영화+보러가기"
-
-# --- TMDB API 영화 데이터 요청 함수 ---
-@st.cache_data(show_spinner=False)
-def fetch_movies_by_mbti(mbti_type):
-    genre_id = MBTI_MAPPING[mbti_type]["genre"]
-    tags = MBTI_MAPPING[mbti_type]["tags"]
+if st.session_state.step == 0:
+    st.progress(25)
+    st.subheader("🎧 금요일 밤, 당신의 선택은?")
     
-    movie_data_list = []
+    if st.button("✨ 친구들과 신나게 놀러간다"):
+        next_step("E")
+    if st.button("🕯️ 집에서 혼자 쉰다"):
+        next_step("I")
+
+elif st.session_state.step == 1:
+    st.progress(50)
+    st.subheader("🎬 어떤 영화가 끌리나요?")
     
-    # 총 24개(기본 8개 + 더보기 16개)의 영화를 가져오기 위해 1~2페이지를 순회
-    for page in range(1, 3):
-        # [수정됨] 마이너한 영화 제외 필터 추가 (한국어/영어, 투표수 500개 이상)
-        discover_url = f"https://api.themoviedb.org/3/discover/movie?api_key={TMDB_API_KEY}&language=ko-KR&sort_by=popularity.desc&with_genres={genre_id}&with_original_language=ko|en&vote_count.gte=500&page={page}"
-        movies_res = requests.get(discover_url).json()
+    if st.button("🔍 현실적인 이야기"):
+        next_step("S")
+    if st.button("🌌 상상력 넘치는 세계관"):
+        next_step("N")
+
+elif st.session_state.step == 2:
+    st.progress(75)
+    st.subheader("🎵 친구에게 노래를 추천한다면?")
+    
+    if st.button("🤯 비트와 편곡이 미쳤다"):
+        next_step("T")
+    if st.button("🥺 감정선이 너무 좋다"):
+        next_step("F")
+
+elif st.session_state.step == 3:
+    st.progress(100)
+    st.subheader("🚗 드라이브 플레이리스트는?")
+    
+    if st.button("🗂️ 미리 계획해서 준비"):
+        next_step("J")
+    if st.button("🎲 랜덤 셔플"):
+        next_step("P")
+
+elif st.session_state.step == 4:
+    if not st.session_state.celebrated:
+        st.balloons()
+        st.session_state.celebrated = True
+
+    mbti_result = "".join(st.session_state.answers)
+    profile = MOOD_PROFILES.get(mbti_result, MOOD_PROFILES["INFP"])
+
+    st.markdown("---")
+    st.markdown("<h3>당신의 미디어 감성 DNA는...</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='color:#7B2FF7;'>💜 {profile['title']}</h1>", unsafe_allow_html=True)
+    st.caption(f"({mbti_result})")
+    st.markdown("---")
+
+    # 영화 추천 화면 출력 부분
+    st.subheader("🍿 당신을 위한 추천 영화")
+
+    with st.spinner("💜 감성 분석 중..."):
+        movies = fetch_movies(profile["genre"])
+
+    for movie in movies[:st.session_state.movie_limit]:
+        st.markdown('<div class="movie-card">', unsafe_allow_html=True)
         
-        for movie in movies_res.get('results', []):
-            if len(movie_data_list) >= 24: # 24개까지만 수집
-                break
-                
-            movie_id = movie['id']
-            provider_url = f"https://api.themoviedb.org/3/movie/{movie_id}/watch/providers?api_key={TMDB_API_KEY}"
-            provider_res = requests.get(provider_url).json()
-            
-            platform = "Google 검색"
-            if 'KR' in provider_res.get('results', {}) and 'flatrate' in provider_res['results']['KR']:
-                platform = provider_res['results']['KR']['flatrate'][0]['provider_name']
-                
-            direct_url = get_direct_link(platform, movie['title'])
-                
-            movie_data_list.append({
-                "title": movie['title'],
-                "platform": platform,
-                "tags": tags + [f"#{platform.replace(' ', '')}"],
-                "img": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie['poster_path'] else "https://via.placeholder.com/500x750?text=No+Image",
-                "url": direct_url,
-                "summary": movie['overview'][:80] + "..." if movie['overview'] else "요약 정보가 없습니다."
-            })
-            
-        if len(movie_data_list) >= 24:
-            break
-            
-    return movie_data_list
+        if movie.get("poster_path"):
+            st.image(f"https://image.tmdb.org/t/p/w500{movie['poster_path']}")
 
-
-# ---------------------------------------------------------
-# 6. 영화 추천 및 리뷰 UI 
-
-# ⭐⭐⭐ 여기부터 추가 ⭐⭐⭐
-if not st.session_state.test_done:
-    st.title("🌙 MoodFlix 감성 테스트")
-    st.info("현재 감성 테스트 기능은 준비 중입니다. 🚧")
-    
-    # 사용자가 이 구간을 빠져나갈 수 있는 탈출구(버튼) 마련
-    if st.button("테스트 건너뛰고 영화 추천받기 🚀", use_container_width=True):
-        st.session_state.test_done = True  # 상태를 True로 변경
-        st.rerun()  # 화면을 새로고침하여 이 if문을 빠져나가게 함
+        st.markdown(f"### {movie['title']}")
+        st.write(movie.get("overview", "줄거리 없음")[:120] + "...")
         
-    st.stop() # 버튼을 누르기 전까지는 하단 영화 추천 코드가 보이지 않도록 대기
-# ⭐⭐⭐ 여기까지 추가 ⭐⭐⭐
+        with st.expander("📝 리뷰 보기 및 작성"):
+            reviews_ref = db.collection("reviews").where("target", "==", movie["title"]).stream()
+            movie_reviews = [{"id": r.id, **r.to_dict()} for r in reviews_ref]
 
-st.subheader("🔍 내 감성 유형에 맞는 추천작 보기")
-selected_mbti = st.session_state.mood_result if st.session_state.mood_result else st.session_state.current_user_mbti
-# MBTI를 새로 선택하면 화면에 보여줄 영화 개수를 다시 8개로 초기화
-if st.session_state.last_mbti != selected_mbti:
-    st.session_state.movie_limit = 8
-    st.session_state.last_mbti = selected_mbti
-
-with st.spinner('해외 서버에서 영화 데이터를 가져오는 중입니다... 🍿'):
-    # 캐싱된 함수 호출 (최대 24개의 데이터 로드)
-    ALL_RECOMMENDED_MOVIES = fetch_movies_by_mbti(selected_mbti)
-
-mood_label = {
-    "calm": "🌙 잔잔한 감성",
-    "romance": "🌸 로맨틱 감성",
-    "deep": "🌌 깊은 사색 감성",
-    "energy": "⚡ 에너지 폭발 감성"
-}
-
-if st.session_state.mood_result:
-    st.success(f"당신의 감성 타입: {mood_label[st.session_state.mood_result]}")
-
-if ALL_RECOMMENDED_MOVIES:
-    # 세션에 저장된 limit 만큼만 슬라이싱하여 보여줌
-    movies_to_display = ALL_RECOMMENDED_MOVIES[:st.session_state.movie_limit]
-    
-    cols = st.columns(4)
-    for i, item in enumerate(movies_to_display):
-        with cols[i % 4]:
-            st.image(item["img"], use_container_width=True)
-            st.markdown(f"**{item['title']}**")
-            st.caption(" ".join(item["tags"]))
-            st.write(f"_{item['summary']}_")
-            st.link_button(f"{item['platform']}에서 바로보기 🍿", item['url'], use_container_width=True)
-            
-            # --- 리뷰 기능 ---
-            with st.expander("📝 리뷰 보기 및 작성"):
-                reviews_ref = db.collection('reviews').where('target', '==', item['title']).stream()
-                movie_reviews = [{"id": r.id, **r.to_dict()} for r in reviews_ref]
-                
-                if movie_reviews:
-                    for rev in movie_reviews:
-                        st.markdown(f"**{rev['name']}** `{rev['mbti']}` ({rev['rating']})")
-                        st.write(f"> {rev['text']}")
-                        
-                        if rev['name'] == st.session_state.current_user:
-                            if st.button("🗑️ 삭제", key=f"del_{rev['id']}_{i}"):
-                                db.collection('reviews').document(rev['id']).delete()
-                                st.rerun() 
-                        st.markdown("---")
-                else:
-                    st.info("아직 리뷰가 없어요. 첫 리뷰를 남겨보세요!")
-                
-                with st.form(key=f"form_{item['title']}_{i}"):
-                    st.write(f"작성자: **{st.session_state.current_user}**")
-                    new_rating = st.selectbox("평점", ["⭐⭐⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐", "⭐⭐", "⭐"], key=f"rate_{item['title']}_{i}")
-                    new_text = st.text_area("리뷰 내용", key=f"text_{item['title']}_{i}")
-                    submit_review = st.form_submit_button("리뷰 등록")
+            if movie_reviews:
+                for rev in movie_reviews:
+                    st.markdown(f"**{rev['name']}**")
+                    st.write(f"> {rev['text']}")
                     
-                    if submit_review and new_text:
-                        new_review_id = str(time.time()) 
-                        db.collection('reviews').document(new_review_id).set({
-                            "target": item['title'],
-                            "name": st.session_state.current_user,
-                            "mbti": st.session_state.current_user_mbti,
-                            "rating": new_rating,
-                            "text": new_text
-                        })
-                        st.rerun() 
-                        
-    # --- [수정됨] 더 보기 버튼 UI ---
-    st.write("") # 여백 추가
+                    if rev["name"] == st.session_state.current_user:
+                        if st.button("🗑️ 삭제", key=f"del_{rev['id']}"):
+                            db.collection("reviews").document(rev["id"]).delete()
+                            st.rerun()
+                    st.markdown("---")
+            else:
+                st.info("첫 리뷰를 남겨보세요!")
+                
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.session_state.movie_limit < len(movies):
+        if st.button("🔽 영화 더 보기"):
+            st.session_state.movie_limit += 4
+            st.rerun()
+
+    st.write("")
     
-    # 24개 미만으로 보여지고 있을 때만 '더 보기' 버튼 노출
-    if st.session_state.movie_limit < len(ALL_RECOMMENDED_MOVIES):
-        # 중앙 정렬을 위해 컬럼 활용
-        _, center_col, _ = st.columns([4, 2, 4])
-        with center_col:
-            if st.button("🔽 추천 영화 더 보기 (16개 추가)", use_container_width=True):
-                # 표시할 영화 개수를 24개로 고정 (8 + 16 = 24)
-                st.session_state.movie_limit = 24
-                st.rerun()
-else:
-    st.info("추천할 영화를 찾지 못했습니다.")
+    if st.button("🔄 테스트 다시하기"):
+        st.session_state.step = 0
+        st.session_state.answers = []
+        st.session_state.movie_limit = 4
+        st.session_state.celebrated = False
+        st.rerun()
