@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import json
+import urllib.parse
 
 # ==========================================
 # 페이지 설정
@@ -62,21 +63,28 @@ div[data-testid="caption"] {
     color: #222222 !important;
 }
 
-/* 버튼 스타일 */
-div.stButton > button:first-child {
+/* 일반 버튼 및 링크 버튼 스타일 통일 */
+div.stButton > button:first-child,
+div.stLinkButton > a {
     background-color:#E6E6FA !important;
     border-radius:15px !important;
     border:2px solid #DCD0FF !important;
     transition:0.3s !important;
-}
-div.stButton > button:first-child p {
     color: black !important;
     font-weight:bold !important;
+    text-decoration: none !important;
+    text-align: center;
+    display: inline-flex;
+    justify-content: center;
 }
-div.stButton > button:first-child:hover {
+div.stButton > button:first-child p,
+div.stLinkButton > a p {
+    color: inherit !important;
+    margin: 0 !important;
+}
+div.stButton > button:first-child:hover,
+div.stLinkButton > a:hover {
     background-color:#B026FF !important;
-}
-div.stButton > button:first-child:hover p {
     color: white !important;
 }
 
@@ -156,7 +164,7 @@ MOOD_PROFILES = {
 }
 
 # ==========================================
-# 영화 API 호출 함수
+# 영화 API 및 시청 링크 로직
 # ==========================================
 
 @st.cache_data(show_spinner=False)
@@ -174,12 +182,35 @@ def fetch_movies(genre_id):
     return res.get("results", [])[:20]
 
 @st.cache_data(show_spinner=False)
-def fetch_watch_link(movie_id):
-    """OTT 서비스(넷플릭스 등) 바로가기 링크를 가져오는 함수"""
+def fetch_providers(movie_id):
     url = f"https://api.themoviedb.org/3/movie/{movie_id}/watch/providers?api_key={TMDB_API_KEY}"
     res = requests.get(url).json()
     kr_data = res.get("results", {}).get("KR", {})
-    return kr_data.get("link", "")
+    
+    # 한국 OTT 목록 추출 (정액제 flatrate 기준)
+    providers = []
+    if "flatrate" in kr_data:
+        for p in kr_data["flatrate"]:
+            providers.append(p["provider_name"])
+    return providers
+
+def get_ott_link(provider_name, title):
+    name = provider_name.lower()
+    query = urllib.parse.quote(title)
+    if "netflix" in name: return f"https://www.netflix.com/search?q={query}"
+    if "watcha" in name: return f"https://pedia.watcha.com/ko-KR/search?query={query}"
+    if "tving" in name: return f"https://www.tving.com/search?keyword={query}"
+    if "wavve" in name: return f"https://www.wavve.com/search/search?searchWord={query}"
+    if "disney" in name: return "https://www.disneyplus.com/"
+    if "amazon" in name: return f"https://www.primevideo.com/search/ref=atv_sr_sug_1?phrase={query}"
+    if "coupang" in name: return "https://www.coupangplay.com/search"
+    if "apple" in name: return f"https://tv.apple.com/kr/search?q={query}"
+    return None
+
+def get_search_link(title):
+    query = urllib.parse.quote(f"{title} 영화 스트리밍 OTT 보러가기")
+    return f"https://www.google.com/search?q={query}"
+
 
 # ==========================================
 # 로그인 / 회원가입 화면
@@ -293,7 +324,6 @@ elif st.session_state.step == 4:
     st.markdown("---")
     st.markdown("<h3>당신의 미디어 감성 DNA는...</h3>", unsafe_allow_html=True)
     st.markdown(f"<h1 style='color:#7B2FF7;'>💜 {profile['title']}</h1>", unsafe_allow_html=True)
-    # [수정 2번] MBTI 글자를 크고 검게 중앙으로
     st.markdown(f"<h2 style='color:#222222;'>({mbti_result})</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
@@ -302,51 +332,83 @@ elif st.session_state.step == 4:
     with st.spinner("💜 감성 분석 중..."):
         movies = fetch_movies(profile["genre"])
 
-    # [수정 1번] HTML 카드 대신 깔끔한 st.container 활용 (테두리 추가)
     for movie in movies[:st.session_state.movie_limit]:
         with st.container(border=True):
             
-            # [수정 3번] 포스터 중앙 정렬
+            # 포스터
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 if movie.get("poster_path"):
                     st.image(f"https://image.tmdb.org/t/p/w500{movie['poster_path']}", use_container_width=True)
 
-            # 제목 및 줄거리
             st.markdown(f"### {movie['title']}")
-            st.write(movie.get("overview", "줄거리 없음")[:120] + "...")
             
-            # [수정 6번] OTT 바로가기 버튼 복구
-            watch_link = fetch_watch_link(movie["id"])
-            if watch_link:
-                st.link_button("▶️ 영화 바로 보러 가기", watch_link)
-            
-            # [수정 4, 5번] 아코디언 색상 문제 해결 및 리뷰 폼 복구
-            with st.expander("📝 리뷰 보기 및 작성"):
+            # 1. 줄거리 더보기 로직
+            overview = movie.get("overview", "줄거리 없음")
+            if len(overview) > 120:
+                state_key = f"more_ov_{movie['id']}"
+                if state_key not in st.session_state:
+                    st.session_state[state_key] = False
                 
-                # 리뷰 작성 폼
+                if st.session_state[state_key]:
+                    st.write(overview)
+                    if st.button("접기 🔼", key=f"btn_fold_{movie['id']}"):
+                        st.session_state[state_key] = False
+                        st.rerun()
+                else:
+                    st.write(overview[:120] + "...")
+                    if st.button("더보기 🔽", key=f"btn_more_{movie['id']}"):
+                        st.session_state[state_key] = True
+                        st.rerun()
+            else:
+                st.write(overview)
+            
+            st.markdown("---")
+
+            # 3. OTT 및 스트리밍 검색 연동
+            providers = fetch_providers(movie["id"])
+            if providers:
+                st.caption("📺 시청 가능한 OTT 플랫폼 (버튼을 누르면 이동합니다)")
+                # 버튼을 예쁘게 정렬하기 위해 최대 4개의 열 생성
+                btn_cols = st.columns(len(providers[:4]))
+                for idx, p in enumerate(providers[:4]):
+                    link = get_ott_link(p, movie["title"])
+                    if not link:
+                        link = get_search_link(movie["title"])
+                    with btn_cols[idx]:
+                        st.link_button(p, link)
+            else:
+                st.link_button("🔍 구글에서 스트리밍 검색", get_search_link(movie["title"]))
+            
+            st.write("") # 간격 띄우기
+            
+            # 2. 리뷰 작성 시 별점 시스템
+            with st.expander("📝 리뷰 보기 및 작성"):
                 with st.form(key=f"review_form_{movie['id']}"):
+                    rating = st.selectbox("별점", ["⭐⭐⭐⭐⭐ (5점)", "⭐⭐⭐⭐ (4점)", "⭐⭐⭐ (3점)", "⭐⭐ (2점)", "⭐ (1점)"])
                     new_review = st.text_input("이 영화에 대한 리뷰를 남겨보세요!", key=f"input_{movie['id']}")
                     submit_btn = st.form_submit_button("리뷰 등록")
                     
                     if submit_btn and new_review:
+                        # "⭐⭐⭐⭐⭐ (5점)" 에서 별 이모지 부분만 추출
+                        star_val = rating.split(" ")[0] 
                         db.collection("reviews").add({
                             "target": movie["title"],
                             "name": st.session_state.current_user,
-                            "text": new_review
+                            "text": new_review,
+                            "rating": star_val
                         })
                         st.rerun()
 
-                # 기존 리뷰 불러오기
                 reviews_ref = db.collection("reviews").where("target", "==", movie["title"]).stream()
                 movie_reviews = [{"id": r.id, **r.to_dict()} for r in reviews_ref]
 
                 if movie_reviews:
                     for rev in movie_reviews:
-                        st.markdown(f"**{rev['name']}**")
+                        user_rating = rev.get('rating', '')
+                        st.markdown(f"**{rev['name']}** {user_rating}")
                         st.write(f"> {rev['text']}")
                         
-                        # 본인 리뷰 삭제 기능
                         if rev["name"] == st.session_state.current_user:
                             if st.button("🗑️ 삭제", key=f"del_{rev['id']}"):
                                 db.collection("reviews").document(rev["id"]).delete()
