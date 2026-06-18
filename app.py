@@ -26,9 +26,19 @@ st.markdown("""
     background-color: #FAFAFF;
 }
 
-/* 제목 */
-h1,h2,h3 {
-    text-align:center;
+/* 제목 기본 색상 (인라인 스타일이 없는 경우 대비 어두운 톤 지정) */
+h1, h2, h3 {
+    text-align: center;
+    color: #222222;
+}
+
+/* [수정] 다크모드 환경에서도 글자가 하얗게 증발하지 않도록 일반 텍스트/라벨/탭 색상 강제 지정 */
+[data-testid="stWidgetLabel"] p, 
+button[data-baseweb="tab"] p,
+.stMarkdown p,
+.stMarkdown span,
+blockquote {
+    color: #222222 !important;
 }
 
 /* 버튼 */
