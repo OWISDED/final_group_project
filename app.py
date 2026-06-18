@@ -26,34 +26,49 @@ st.markdown("""
     background-color: #FAFAFF;
 }
 
-/* 제목 기본 색상 (인라인 스타일이 없는 경우 대비 어두운 톤 지정) */
-h1, h2, h3 {
-    text-align: center;
-    color: #222222;
+/* [수정] 다크모드 환경에서도 모든 글자가 묻히지 않도록 강제 지정 */
+h1, h2, h3, h4, h5, h6, 
+.stMarkdown p, .stMarkdown span,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stExpander"] p,
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] span,
+[data-baseweb="tab"] p,
+.movie-card p, .movie-card h3 {
+    color: #222222 !important;
 }
 
-/* [수정] 다크모드 환경에서도 글자가 하얗게 증발하지 않도록 일반 텍스트/라벨/탭 색상 강제 지정 */
-[data-testid="stWidgetLabel"] p, 
-button[data-baseweb="tab"] p,
-.stMarkdown p,
-.stMarkdown span,
-blockquote {
-    color: #222222 !important;
+/* 캡션(작은 글씨) 색상 조정 */
+.st-emotion-cache-1n76uvr, 
+div[data-testid="caption"] {
+    color: #555555 !important;
+}
+
+/* 제목 가운데 정렬 */
+h1, h2, h3 {
+    text-align: center;
 }
 
 /* 버튼 */
 div.stButton > button:first-child {
-    background-color:#E6E6FA;
-    color:black;
-    border-radius:15px;
-    border:2px solid #DCD0FF;
-    font-weight:bold;
-    transition:0.3s;
+    background-color:#E6E6FA !important;
+    border-radius:15px !important;
+    border:2px solid #DCD0FF !important;
+    transition:0.3s !important;
 }
 
+/* 버튼 안의 글씨 */
+div.stButton > button:first-child p {
+    color: black !important;
+    font-weight:bold !important;
+}
+
+/* 버튼 호버(마우스 올렸을 때) */
 div.stButton > button:first-child:hover {
-    background-color:#B026FF;
-    color:white;
+    background-color:#B026FF !important;
+}
+div.stButton > button:first-child:hover p {
+    color: white !important;
 }
 
 /* 입력창 */
@@ -61,7 +76,7 @@ div.stButton > button:first-child:hover {
 .stTextArea textarea {
     background-color:white !important;
     color:black !important;
-    border-radius:10px;
+    border-radius:10px !important;
 }
 
 /* 카드 */
